@@ -339,6 +339,7 @@ The `-C` flag is useful for modern web apps that use custom clickable elements (
 | `--proxy <url>` | Proxy server URL with optional auth (or `AGENT_BROWSER_PROXY` env) |
 | `--proxy-bypass <hosts>` | Hosts to bypass proxy (or `AGENT_BROWSER_PROXY_BYPASS` env) |
 | `-p, --provider <name>` | Cloud browser provider (or `AGENT_BROWSER_PROVIDER` env) |
+| `-b, --browser <name>` | Browser engine: chromium, firefox, webkit, camoufox |
 | `--json` | JSON output (for agents) |
 | `--full, -f` | Full page screenshot |
 | `--name, -n` | Locator name filter |
@@ -348,6 +349,15 @@ The `-C` flag is useful for modern web apps that use custom clickable elements (
 | `--ignore-https-errors` | Ignore HTTPS certificate errors (useful for self-signed certs) |
 | `--allow-file-access` | Allow file:// URLs to access local files (Chromium only) |
 | `--debug` | Debug output |
+
+## Camoufox (camoufox-js)
+
+For stronger anti-detection, you can run against Camoufox (Firefox-based). First download the Camoufox browser, then use `--browser camoufox`:
+
+```bash
+npx camoufox-js fetch
+agent-browser --browser camoufox open https://example.com
+```
 
 ## Selectors
 

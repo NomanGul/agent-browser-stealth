@@ -11,7 +11,7 @@ export interface LaunchCommand extends BaseCommand {
   action: 'launch';
   headless?: boolean;
   viewport?: { width: number; height: number };
-  browser?: 'chromium' | 'firefox' | 'webkit';
+  browser?: 'chromium' | 'firefox' | 'webkit' | 'camoufox';
   headers?: Record<string, string>;
   executablePath?: string;
   cdpPort?: number;

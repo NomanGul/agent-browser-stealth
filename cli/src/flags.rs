@@ -17,6 +17,7 @@ pub struct Flags {
     pub args: Option<String>,
     pub user_agent: Option<String>,
     pub provider: Option<String>,
+    pub browser: Option<String>,
     pub ignore_https_errors: bool,
     pub allow_file_access: bool,
     pub device: Option<String>,
@@ -62,6 +63,7 @@ pub fn parse_flags(args: &[String]) -> Flags {
         args: env::var("AGENT_BROWSER_ARGS").ok(),
         user_agent: env::var("AGENT_BROWSER_USER_AGENT").ok(),
         provider: env::var("AGENT_BROWSER_PROVIDER").ok(),
+        browser: None,
         ignore_https_errors: false,
         allow_file_access: env::var("AGENT_BROWSER_ALLOW_FILE_ACCESS").is_ok(),
         device: env::var("AGENT_BROWSER_IOS_DEVICE").ok(),
@@ -164,6 +166,12 @@ pub fn parse_flags(args: &[String]) -> Flags {
                     i += 1;
                 }
             }
+            "-b" | "--browser" => {
+                if let Some(b) = args.get(i + 1) {
+                    flags.browser = Some(b.clone());
+                    i += 1;
+                }
+            }
             "--ignore-https-errors" => flags.ignore_https_errors = true,
             "--allow-file-access" => {
                 flags.allow_file_access = true;
@@ -210,6 +218,8 @@ pub fn clean_args(args: &[String]) -> Vec<String> {
         "--user-agent",
         "-p",
         "--provider",
+        "-b",
+        "--browser",
         "--device",
     ];
 

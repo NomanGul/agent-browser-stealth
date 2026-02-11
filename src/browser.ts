@@ -20,6 +20,30 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import type { LaunchCommand } from './types.js';
 import { type RefMap, type EnhancedSnapshot, getEnhancedSnapshot, parseRef } from './snapshot.js';
 
+function parseBooleanEnv(value: string | undefined, defaultValue = false): boolean {
+  if (value === undefined) return defaultValue;
+  const v = value.trim().toLowerCase();
+  if (v === '1' || v === 'true' || v === 'yes' || v === 'y' || v === 'on') return true;
+  if (v === '0' || v === 'false' || v === 'no' || v === 'n' || v === 'off') return false;
+  return defaultValue;
+}
+
+function mergeArgs(...lists: Array<string[] | undefined>): string[] | undefined {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    if (!list) continue;
+    for (const arg of list) {
+      const trimmed = arg.trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 // Screencast frame data from CDP
 export interface ScreencastFrame {
   data: string; // base64 encoded image
@@ -1077,7 +1101,14 @@ export class BrowserManager {
       return;
     }
 
-    const browserType = options.browser ?? 'chromium';
+    const browserType = (options.browser ?? 'chromium') as NonNullable<LaunchCommand['browser']>;
+
+    if (!['chromium', 'firefox', 'webkit', 'camoufox'].includes(browserType)) {
+      throw new Error(
+        `Invalid browser type: ${browserType}. Expected: chromium, firefox, webkit, camoufox`
+      );
+    }
+
     if (hasExtensions && browserType !== 'chromium') {
       throw new Error('Extensions are only supported in Chromium');
     }
@@ -1087,9 +1118,110 @@ export class BrowserManager {
       throw new Error('allowFileAccess is only supported in Chromium');
     }
 
+    const viewport = options.viewport ?? { width: 1920, height: 1080 };
+
+    if (browserType === 'camoufox') {
+      if (hasExtensions) {
+        throw new Error('Extensions are only supported in Chromium');
+      }
+      if (options.allowFileAccess) {
+        throw new Error('allowFileAccess is only supported in Chromium');
+      }
+
+      let camoufoxLaunchOptions: unknown;
+      try {
+        const { launchOptions } = await import('camoufox-js');
+        const camoufoxOsRaw = process.env.AGENT_BROWSER_CAMOUFOX_OS;
+        const camoufoxOsList = camoufoxOsRaw
+          ? camoufoxOsRaw
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : undefined;
+        const camoufoxOsNormalized = camoufoxOsList
+          ? camoufoxOsList.map((v) => v.toLowerCase())
+          : undefined;
+        if (
+          camoufoxOsNormalized &&
+          camoufoxOsNormalized.some((v) => v !== 'linux' && v !== 'macos' && v !== 'windows')
+        ) {
+          throw new Error(
+            'Invalid AGENT_BROWSER_CAMOUFOX_OS. Expected: linux, macos, windows (comma-separated for random selection)'
+          );
+        }
+        const camoufoxOs = camoufoxOsNormalized as Array<'linux' | 'macos' | 'windows'> | undefined;
+        const camoufoxDebug = parseBooleanEnv(process.env.AGENT_BROWSER_CAMOUFOX_DEBUG, false);
+
+        camoufoxLaunchOptions = await launchOptions({
+          headless: options.headless ?? true,
+          ...(camoufoxOs && { os: camoufoxOs.length === 1 ? camoufoxOs[0] : camoufoxOs }),
+          ...(camoufoxDebug && { debug: true }),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('better-sqlite3') && message.includes('bindings file')) {
+          throw new Error(
+            'Failed to launch Camoufox because better-sqlite3 native bindings are missing. ' +
+              'If you are using pnpm with build-script approvals, run `pnpm approve-builds` and allow `better-sqlite3`, ' +
+              'then reinstall (or run `pnpm rebuild better-sqlite3`).'
+          );
+        }
+        throw error;
+      }
+
+      let context: BrowserContext;
+      if (hasProfile) {
+        // Profile uses persistent context for durable cookies/storage
+        const profilePath = options.profile!.replace(/^~\//, os.homedir() + '/');
+        context = await firefox.launchPersistentContext(profilePath, {
+          ...(camoufoxLaunchOptions as any),
+          headless: options.headless ?? (camoufoxLaunchOptions as any).headless ?? true,
+          executablePath:
+            options.executablePath ?? (camoufoxLaunchOptions as any).executablePath ?? undefined,
+          args: mergeArgs((camoufoxLaunchOptions as any).args, options.args),
+          viewport,
+          extraHTTPHeaders: options.headers,
+          userAgent: options.userAgent,
+          ...(options.proxy && { proxy: options.proxy }),
+          ignoreHTTPSErrors: options.ignoreHTTPSErrors ?? false,
+        });
+        this.isPersistentContext = true;
+      } else {
+        // Regular ephemeral browser
+        this.browser = await firefox.launch({
+          ...(camoufoxLaunchOptions as any),
+          headless: options.headless ?? (camoufoxLaunchOptions as any).headless ?? true,
+          executablePath:
+            options.executablePath ?? (camoufoxLaunchOptions as any).executablePath ?? undefined,
+          args: mergeArgs((camoufoxLaunchOptions as any).args, options.args),
+          ...(options.proxy && { proxy: options.proxy }),
+        });
+        this.cdpEndpoint = null;
+        context = await this.browser.newContext({
+          viewport,
+          extraHTTPHeaders: options.headers,
+          userAgent: options.userAgent,
+          ...(options.proxy && { proxy: options.proxy }),
+          ignoreHTTPSErrors: options.ignoreHTTPSErrors ?? false,
+          ...(options.storageState && { storageState: options.storageState }),
+        });
+      }
+
+      context.setDefaultTimeout(60000);
+      this.contexts.push(context);
+      this.setupContextTracking(context);
+
+      const page = context.pages()[0] ?? (await context.newPage());
+      if (!this.pages.includes(page)) {
+        this.pages.push(page);
+        this.setupPageTracking(page);
+      }
+      this.activePageIndex = this.pages.length > 0 ? this.pages.length - 1 : 0;
+      return;
+    }
+
     const launcher =
       browserType === 'firefox' ? firefox : browserType === 'webkit' ? webkit : chromium;
-    const viewport = options.viewport ?? { width: 1280, height: 720 };
 
     // Build base args array with file access flags if enabled
     // --allow-file-access-from-files: allows file:// URLs to read other file:// URLs via XHR/fetch

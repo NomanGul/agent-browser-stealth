@@ -1773,6 +1773,7 @@ Options:
   --ignore-https-errors      Ignore HTTPS certificate errors
   --allow-file-access        Allow file:// URLs to access local files (Chromium only)
   -p, --provider <name>      Browser provider: ios, browserbase, kernel, browseruse
+  -b, --browser <name>       Browser engine: chromium, firefox, webkit, camoufox
   --device <name>            iOS device name (e.g., "iPhone 15 Pro")
   --json                     JSON output
   --full, -f                 Full page screenshot
