@@ -420,7 +420,8 @@ fn main() {
         || flags.proxy.is_some()
         || flags.args.is_some()
         || flags.user_agent.is_some()
-        || flags.allow_file_access)
+        || flags.allow_file_access
+        || flags.browser.is_some())
         && flags.cdp.is_none()
         && flags.provider.is_none()
     {
@@ -470,11 +471,15 @@ fn main() {
         }
 
         if flags.ignore_https_errors {
-            launch_cmd["ignoreHTTPSErrors"] = json!(true);
+            cmd_obj.insert("ignoreHTTPSErrors".to_string(), json!(true));
         }
 
         if flags.allow_file_access {
-            launch_cmd["allowFileAccess"] = json!(true);
+            cmd_obj.insert("allowFileAccess".to_string(), json!(true));
+        }
+
+        if let Some(ref b) = flags.browser {
+            cmd_obj.insert("browser".to_string(), json!(b));
         }
 
         match send_command(launch_cmd, &flags.session) {

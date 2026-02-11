@@ -17,7 +17,7 @@ const launchSchema = baseCommandSchema.extend({
       height: z.number().positive(),
     })
     .optional(),
-  browser: z.enum(['chromium', 'firefox', 'webkit']).optional(),
+  browser: z.enum(['chromium', 'firefox', 'webkit', 'camoufox']).optional(),
   cdpPort: z.number().positive().optional(),
   cdpUrl: z
     .string()

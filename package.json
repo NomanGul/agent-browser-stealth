@@ -55,6 +55,7 @@
   },
   "homepage": "https://github.com/vercel-labs/agent-browser#readme",
   "dependencies": {
+    "camoufox-js": "^0.8.5",
     "node-simctl": "^7.4.0",
     "playwright-core": "^1.57.0",
     "webdriverio": "^9.15.0",

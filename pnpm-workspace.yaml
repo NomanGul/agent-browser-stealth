@@ -1,0 +1,7 @@
+packages:
+  - "."
+
+# pnpm v10+ may ignore build scripts unless explicitly approved.
+# camoufox-js depends on better-sqlite3 (native), so allow it to build.
+onlyBuiltDependencies:
+  - better-sqlite3
